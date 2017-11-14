@@ -1,6 +1,6 @@
 # ModSecurity JSON to Elasticsearch
 please, read the following post before using it:
-[coming soon](#)
+[https://medium.com/@themiddleblue/modsecurity-elasticsearch-kibana-40e4f8191e35](https://medium.com/@themiddleblue/modsecurity-elasticsearch-kibana-40e4f8191e35)
 
 ### Usage:
 ```bash
@@ -21,5 +21,5 @@ $ python modsec_parser.py -d /usr/local/nginx/logs/modsecurity/www.example.com >
 ```
 
 ### Contributors
-probably your python skill are better then mine, so all contributions are appreciated :)
+probably your python skills are better then mine, so all contributions are appreciated :)
 

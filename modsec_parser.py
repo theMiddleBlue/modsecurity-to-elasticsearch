@@ -121,7 +121,7 @@ def parseLogFile(file):
 while True:
 	for root, subFolders, files in os.walk(basedir):
 		for file in files:
-			logfile = os.path.join(root, file);
+			logfile = os.path.join(root, file)
 			parseLogFile(file=logfile)
 
 	print "Sleeping for a while..."

@@ -8,31 +8,75 @@
 # | GitHub: https://github.com/theMiddleBlue           |
 # '===================================================='
 #
-
 import sys, os, getopt, json, time
 from datetime import datetime,date
 from elasticsearch import Elasticsearch
 
-# Please, check the elasticsearch URL below:
-es = Elasticsearch(['http://127.0.0.1:9200'])
+# Default values
+es_host = '127.0.0.1'
+es_port = '9200'
+s = 5
 
+def show_help():
+	print """
+    usage:  -d  "modsecurity Audity log dir"    -h   "Elasticsearch ip"    -p   "Elasticsearch host"    -s seconds
+
+    -d, --log-directory  Same as your SecAuditLogStorageDir var in modsecurity.conf
+    -h, --host           Elasticsearch ip - default 127.0.0.1
+    -p, --port           Elasticsearch port - default 9200
+    -s, --sleep          Sleeping for n seconds - default 5
+    -H, --help           Print this help summary page 
+    """
 # parse arguments
-opts, args = getopt.getopt(sys.argv[1:],"hd:",["help","log-directory="])
-for i in opts:
-	if i[0] == "-d" or i[0] == "--log-directory":
-		basedir = i[1]
+try:
+	opts, args = getopt.getopt(sys.argv[1:], 'h:p:s:d:H', ['host=', 'port=', 'sleep=', 'log-directory=', 'help'])
+except getopt.GetoptError:
+	show_help()
+	sys.exit(2)
+
+for opt, arg in opts:
+	if opt in ('-h', '--host'):
+		es_host = arg
+	elif opt in ('-p', '--port'):
+		es_port = arg
+	elif opt in ('-s', '--sleep'):
+		s = float(arg)
+	elif opt in ('-d', '--log-directory'):
+		basedir = arg
+	elif opt in ('-H' '--help'):
+		show_help()
+		sys.exit(2)
+	else:
+		show_help()
+		sys.exit(2)
+
+try:
+	basedir
+except NameError:
+	print "You must define at least the log directory"
+	show_help()
+	sys.exit(2)
+
+print 'Doing parse with ....'
+print 'log_dir                 ', basedir
+print 'Elasticsearch host      ', es_host
+print 'Elasticsearch port      ', es_port
+print 'Sleep time              ', s
+# Please, check the elasticsearch URL below:
+es = Elasticsearch(['http://'+es_host+':'+es_port+''])
+print es
 
 # set headers name to lowercase
 def renameKeys(iterable):
-    if type(iterable) is dict:
-        for key in iterable.keys():
-            iterable[key.lower()] = iterable.pop(key)
-            if type(iterable[key.lower()]) is dict or type(iterable[key.lower()]) is list:
-                iterable[key.lower()] = renameKeys(iterable[key.lower()])
-    elif type(iterable) is list:
-        for item in iterable:
-            item = renameKeys(item)
-    return iterable
+	if type(iterable) is dict:
+		for key in iterable.keys():
+			iterable[key.lower()] = iterable.pop(key)
+			if type(iterable[key.lower()]) is dict or type(iterable[key.lower()]) is list:
+				iterable[key.lower()] = renameKeys(iterable[key.lower()])
+	elif type(iterable) is list:
+		for item in iterable:
+			item = renameKeys(item)
+	return iterable
 
 # parsing...
 def parseLogFile(file):
@@ -112,17 +156,16 @@ def parseLogFile(file):
 	res = es.index(index=index, doc_type="modsecurity", body=d['transaction'])
 
 	# check if log has been created
-	if res['created'] is True:
+	if res['result'] == 'created':
 		os.remove(file)
 		print "Parsed "+str(file)
 	else:
 		print "Warning: log not created:"
 		print res
+
 while True:
 	for root, subFolders, files in os.walk(basedir):
 		for file in files:
 			logfile = os.path.join(root, file)
 			parseLogFile(file=logfile)
-
-	print "Sleeping for a while..."
-	time.sleep(5)
+	time.sleep(s)

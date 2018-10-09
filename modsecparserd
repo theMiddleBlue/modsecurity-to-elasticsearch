@@ -1,0 +1,193 @@
+#!/bin/bash
+# ============================================
+#  Modsec Parser - Starts the modsecurity parser daemon.
+# ============================================
+#
+# :Usage: /etc/init.d/modsecparser {start|stop|force-reload|restart|try-restart|status}
+# :Configuration file: /etc/default/modsec_parserd (or /usr/local/etc/modsec_parserd on BSD)
+#
+# See https://github.com/theMiddleBlue/modsecurity-to-elasticsearch
+
+### BEGIN INIT INFO
+# Provides: Modsecurity parser daemon
+# Description:       Starts the Modsecurity parser
+# Short-Description: Starts the Modsecurity parser using start-stop-daemon
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Should-Start:      $syslog
+# Should-Stop:       $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+### END INIT INFO
+
+VERSION=0.1
+
+USER="deploy"
+GROUP="deploy"
+PID_FILE="/var/run/modsecparser/modsecparser.pid"
+LOG_FILE="/var/log/modsecparser/modsecparser.log"
+MODSEC_PARSER_HOME='/etc/modsecparser'
+DAEMON_NAME=ModsecParser
+LOG_DIR=`dirname $LOG_FILE`
+PID_DIR=`dirname $PID_FILE`
+
+export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
+
+if [ -d "/etc/default" ]; then
+    CONFIG_DIR="/etc/default"
+else
+    CONFIG_DIR="/usr/local/etc"
+fi
+
+CONFIG_DEFAULTS=${CONFIG_DEFAULTS:-"$CONFIG_DIR/modsecparserd.conf"}
+# Make sure executable configuration script is owned by root
+_config_sanity() {
+    local path="$1"
+    local owner=$(ls -ld "$path" | awk '{print $3}')
+    local iwgrp=$(ls -ld "$path" | cut -b 6)
+    local iwoth=$(ls -ld "$path" | cut -b 9)
+
+    if [ "$(id -u $owner)" != "0" ]; then
+        echo "Error: Config script '$path' must be owned by root!"
+        echo
+        echo "Resolution:"
+        echo "Review the file carefully, and make sure it hasn't been "
+        echo "modified with mailicious intent.  When sure the "
+        echo "script is safe to execute with superuser privileges "
+        echo "you can change ownership of the script:"
+        echo "    $ sudo chown root '$path'"
+        exit 1
+    fi
+
+    if [ "$iwoth" != "-" ]; then  # S_IWOTH
+        echo "Error: Config script '$path' cannot be writable by others!"
+        echo
+        echo "Resolution:"
+        echo "Review the file carefully, and make sure it hasn't been "
+        echo "modified with malicious intent.  When sure the "
+        echo "script is safe to execute with superuser privileges "
+        echo "you can change the scripts permissions:"
+        echo "    $ sudo chmod 640 '$path'"
+        exit 1
+    fi
+    if [ "$iwgrp" != "-" ]; then  # S_IWGRP
+        echo "Error: Config script '$path' cannot be writable by group!"
+        echo
+        echo "Resolution:"
+        echo "Review the file carefully, and make sure it hasn't been "
+        echo "modified with malicious intent.  When sure the "
+        echo "script is safe to execute with superuser privileges "
+        echo "you can change the scripts permissions:"
+        echo "    $ sudo chmod 640 '$path'"
+        exit 1
+    fi
+}
+
+if [ -f "$CONFIG_DEFAULTS" ]; then
+    _config_sanity "$CONFIG_DEFAULTS"
+    echo "Using config script: $CONFIG_DEFAULTS"
+    . "$CONFIG_DEFAULTS"
+fi
+
+DAEMON="$MODSEC_TO_ES_PARSER"
+DAEMON_OPTS=""
+
+[[ -z "$MODSECURITY_LOG_DIR" ]] && DAEMON_OPTS="$DAEMON_OPTS" || DAEMON_OPTS="$DAEMON_OPTS -d $MODSECURITY_LOG_DIR"
+[[ -z "$ELASTICSEARCH_HOST" ]]  && DAEMON_OPTS="$DAEMON_OPTS" || DAEMON_OPTS="$DAEMON_OPTS -h $ELASTICSEARCH_HOST"
+[[ -z "$ELASTICSEARCH_PORT" ]]  && DAEMON_OPTS="$DAEMON_OPTS" || DAEMON_OPTS="$DAEMON_OPTS -p $ELASTICSEARCH_PORT"
+[[ -z "$SLEEP" ]]               && DAEMON_OPTS="$DAEMON_OPTS" || DAEMON_OPTS="$DAEMON_OPTS -s $SLEEP"
+
+maybe_die() {
+    if [ $? -ne 0 ]; then
+        echo "Exiting: $* (errno $?)"
+        exit 77  # EX_NOPERM
+    fi
+}
+
+create_default_dir() {
+    if [ ! -d "$1" ]; then
+        echo "- Creating default directory: '$1'"
+        mkdir -p "$1"
+        maybe_die "Couldn't create directory $1"
+        echo "- Changing permissions of '$1' to 02755"
+        chmod 02755 "$1"
+        maybe_die "Couldn't change permissions for $1"
+        if [ -n "$USER" ]; then
+            echo "- Changing owner of '$1' to '$USER'"
+            chown "$USER" "$1"
+            maybe_die "Couldn't change owner of $1"
+        fi
+        if [ -n "$GROUP" ]; then
+            echo "- Changing group of '$1' to '$GROUP'"
+            chgrp "$GROUP" "$1"
+            maybe_die "Couldn't change group of $1"
+        fi
+    fi
+}
+
+create_paths() {
+    create_default_dir "$LOG_DIR"
+    create_default_dir "$PID_DIR"
+}
+
+status() {
+   if [ -e $PID_FILE ]; then
+      echo ModsecParser is running, pid=`cat $PID_FILE`
+   else
+      echo ModsecParser is NOT running
+   fi
+}
+
+stop() {
+  echo 'Stopping ModsecParser service ... '
+  if [ ! -f "$PID_FILE" ] || ! kill -0 $(cat "$PID_FILE") 2> /dev/null; then
+    echo 'ModsecParser is NOT running'
+    rm -f $PID_FILE
+    return 1
+  fi
+  start-stop-daemon --stop --pidfile $PID_FILE --retry 10
+  rm -f $PID_FILE
+  echo 'Done' >&2
+}
+
+start() {
+
+  if [ -f $PID_FILE ] && kill -0 $(cat $PID_FILE) 2> /dev/null; then
+    echo  ModsecParser is running, pid=`cat $PID_FILE`
+    return 1
+  else
+    echo 'Starting service ...'
+
+    if [ ! -f "$LOG_FILE" ]; then
+        touch $LOG_FILE
+        chmod 777 $LOG_FILE
+    fi
+    #export PYTHONPATH=$PYTHONPATH:$MODSEC_PARSER_HOME/env
+    start-stop-daemon --start --background --make-pidfile  --pidfile $PID_FILE --user $USER --chuid $USER --startas /bin/bash -- -c "exec  $DAEMON $DAEMON_OPTS > $LOG_FILE 2>&1"
+    sleep 2s
+    if [ $? -ne 0 ]; then
+      echo Failed ModsecParser is NOT running, see the log $LOG_FILE >&2
+    else
+      echo Done ModsecParser is running, pid=`cat $PID_FILE` >&2
+    fi
+  fi
+}
+
+case "$1" in
+  start)
+    create_paths
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart)
+    stop
+    start
+    ;;
+   status)
+    status
+   ;;
+  *)
+   echo "Usage: $0 {start|stop|status|restart}"
+esac

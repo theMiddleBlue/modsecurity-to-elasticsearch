@@ -58,6 +58,10 @@ Configure:
 
 ```
 Using config script: /etc/default/modsecparserd.conf
+
+Important: The USER defined needs install elasticsearch  (pip install elasticsearch)
+
+WIP: create virtualenv for the service  (maybe in the directory /etc/modsecparser/env)
 ```
 
 

@@ -30,7 +30,6 @@ $ python2 modsec_parser.py --help
 
 ```
 
-
 Run it in background
 
 ```
@@ -38,6 +37,28 @@ $ python modsec_parser.py -d /usr/local/nginx/logs/modsecurity/www.example.com >
 ```
 
 ### Service:
+
+Install:
+
+```
+git clone https://github.com/theMiddleBlue/modsecurity-to-elasticsearch.git
+cd modsecurity-to-elasticsearch
+sudo python setup.py install
+```
+
+Control:
+
+```
+sudo /etc/init.d/modsecparserd {start|stop|status|restart}
+
+```
+
+
+Configure:
+
+```
+Using config script: /etc/default/modsecparserd.conf
+```
 
 
 

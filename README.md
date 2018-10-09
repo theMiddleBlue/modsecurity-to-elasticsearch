@@ -14,11 +14,32 @@ Parsed /usr/local/nginx/logs/modsecurity/www.example.com/20171114/20171114-1714/
 Sleeping for a while...
 ```
 
-or run it in background
+### Options:
+
+```
+$ python2 modsec_parser.py --help
+
+    usage:  -d  "modsecurity Audity log dir"    -h   "Elasticsearch ip"    -p   "Elasticsearch host"    -s seconds
+
+    -d, --log-directory  Same as your SecAuditLogStorageDir var in modsecurity.conf
+    -h, --host           Elasticsearch ip - default 127.0.0.1
+    -p, --port           Elasticsearch port - default 9200
+    -s, --sleep          Sleeping for n seconds - default 5
+    -H, --help           Print this help summary page
+
+
+```
+
+
+Run it in background
 
 ```
 $ python modsec_parser.py -d /usr/local/nginx/logs/modsecurity/www.example.com > /dev/null 2>&1 &
 ```
+
+### Service:
+
+
 
 ### Contributors
 probably your python skills are better then mine, so all contributions are appreciated :)
